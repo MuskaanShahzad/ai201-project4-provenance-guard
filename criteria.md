@@ -62,7 +62,7 @@ Clearly-AI text (raw model output) scores at least 0.3 higher on the combined sc
 
 Across 10 varied test texts, all three labels (high-confidence human, unsure, high-confidence AI) are each produced at least once.
 
-**Why this target:** A label nobody can reach isn't a real label — it means the system's actual behavior doesn't match what it claims to offer a reader.
+**Why this target:** My thresholds (0.35 and 0.65 in config.py) only work if all three bands are actually reachable by real scores. If my combining rule or either signal clustered scores into a narrow range, the unsure band could end up empty, and a writer who deserves a cautious "we're not sure" would get a harder verdict instead. That's a specific failure mode of my scoring pipeline, not just a general design worry.
 
 ---
 
@@ -70,7 +70,7 @@ Across 10 varied test texts, all three labels (high-confidence human, unsure, hi
 
 100% of appeals submitted with a valid content_id move that item's status to under_review and appear in the audit log, with no exceptions across testing.
 
-**Why this target:** The appeal is the only thing standing between a wrong accusation and nothing at all — if it silently fails sometimes, it isn't a real safeguard.
+**Why this target:** My combining rule already leans 70% toward the human-reading signal when the two disagree, specifically to cut down on false accusations. That design choice only protects anyone if the one remaining safety net, the appeal, actually works every single time. If even one real appeal silently failed to log or change status, a wrongly-accused writer would have no way to be heard, which is exactly the harm my Milestone 1 false-positive trace was built around.
 
 ---
 
@@ -78,7 +78,7 @@ Across 10 varied test texts, all three labels (high-confidence human, unsure, hi
 
 Submitting missing, empty, or oversized text never returns a 500 — each case returns a specific error response instead.
 
-**Why this target:** Malformed input is one of the most common real failures a service sees; crashing on it is worse than just rejecting it cleanly.
+**Why this target:** My first signal (detector.model_signal) raises an error on text shorter than three tokens, so missing or empty text could crash the whole request before a label is ever produced. A crash there doesn't just fail loudly, it leaves a writer with no response at all, which is worse than getting an unsure label or a plain error message telling them what went wrong.
 
 
 
