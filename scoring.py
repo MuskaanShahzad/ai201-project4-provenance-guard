@@ -51,11 +51,31 @@ def combine_signals(model_score: float, style_score: float) -> float:
 
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
+
+    **The rule:** when the two signals are within 0.3 of each other, they're
+    agreeing enough to average normally, weighted 0.5/0.5 — neither signal has
+    a track record good enough to outweigh the other when they align.
+
+    When they split by more than 0.3, that split IS the uncertainty, and
+    Milestone 1's false-positive trace decided which way to lean: a missed
+    detection costs the site a little, a wrong accusation costs a real writer
+    a lot. So a sharp disagreement is weighted 70% toward whichever signal
+    reads more human (the lower of the two) and 30% toward the one reading
+    more AI — pulling the combined score toward the safer mistake instead of
+    splitting the difference down the middle.
     """
-    # TODO: replace this
-    return (
+    if abs(model_score - style_score) > config.DISAGREEMENT_THRESHOLD:
+        lower, higher = min(model_score, style_score), max(model_score, style_score)
+        return round(
+            lower * config.DISAGREEMENT_LEAN_HUMAN
+            + higher * config.DISAGREEMENT_LEAN_AI,
+            4,
+        )
+
+    return round(
         config.WEIGHT_MODEL_SIGNAL * model_score
-        + config.WEIGHT_STYLE_SIGNAL * style_score
+        + config.WEIGHT_STYLE_SIGNAL * style_score,
+        4,
     )
 
 

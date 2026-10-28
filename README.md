@@ -39,13 +39,13 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
-1. A `POST /submit` request arrives with JSON: `text` and `creator_id`.
+1. A `POST /submit` request comes in with JSON: `text` and `creator_id`.
 2. The route pulls `text` and `creator_id` out of the request body.
-3. Signal one (`detector.py`) runs a local language model on the text and returns `model_score` — how predictable the text is, as a 0–1 number.
-4. Signal two (`stylometry.py`) measures the text's shape — sentence-length spread, vocabulary variety, punctuation — and returns `style_score`, also 0–1.
+3. Signal one (`detector.py`) runs a local language model on the text and returns `model_score`, a number from 0 to 1 showing how predictable the text is.
+4. Signal two (`stylometry.py`) measures the shape of the text (sentence length spread, vocabulary variety, punctuation) and returns `style_score`, also from 0 to 1.
 5. `scoring.combine_signals()` merges `model_score` and `style_score` into one `combined_score`.
-6. `scoring.score_to_label()` turns that score into a short `guess` (`ai` / `human` / `unsure`) and the full label text a reader sees.
-7. The decision is written to the audit log via `audit.log_decision()`, and the response is returned with `content_id`, `guess`, `confidence`, `label`, `model_score`, and `style_score`.
+6. `scoring.score_to_label()` turns that score into a short `guess` (`ai`, `human`, or `unsure`) and the full label text a reader sees.
+7. The decision gets written to the audit log through `audit.log_decision()`, and the response goes back with `content_id`, `guess`, `confidence`, `label`, `model_score`, and `style_score`.
 
 ---
 
@@ -53,37 +53,35 @@
 
 ### Signal one — the model signal
 
-**What it measures:** Perplexity — how surprised a local language model (gpt2) is by the text, i.e. how predictable each next word is given what came before. Low perplexity means the model found the text easy to guess; high perplexity means it didn't.
+**What it measures:** Perplexity, which is how surprised a local language model (gpt2) is by the text. It's checking how predictable each next word is, given what came before it. Low perplexity means the model found the text easy to guess. High perplexity means it didn't.
 
-**Why that might differ between human and AI writing:** A language model writes by repeatedly picking a likely next word, so AI-generated text tends to be exactly what a model would predict — low perplexity. Human writing wanders more: odd word choices, abrupt turns, specific rather than typical phrasing.
+**Why that might differ between human and AI writing:** A language model writes by repeatedly picking a likely next word, so AI-generated text tends to be exactly what a model would predict, which shows up as low perplexity. Human writing wanders more: odd word choices, abrupt turns, specific details instead of typical phrasing.
 
-**What it can't see:** The difference between plainness and authorship. This signal rewards common words in short, ordinary sentences — which plenty of real people write in. Someone writing in a second language, a younger writer, anyone writing simply on purpose, scores about as machine-like as AI writing does. The reverse is also true: dense, rare-word prose often scores human even when AI wrote it, because rare words are what the model fails to predict. The writers this signal is most likely to accuse are the ones with the least room to argue back.
+**What it can't see:** The difference between plainness and authorship. This signal rewards common words in short, ordinary sentences, and plenty of real people write that way. Someone writing in a second language, a younger writer, or anyone being plain on purpose can score about as machine-like as actual AI writing does. The reverse is true too: dense, rare-word prose often scores as human even when AI wrote it, because rare words are exactly what the model fails to predict. The writers this signal is most likely to accuse are the ones with the least room to argue back.
 
 ### Signal two — the style signal
 
-**What it measures:** The shape of the text, not its meaning — how much sentence length varies, how varied the vocabulary is (type-token ratio), and how much/what kind of punctuation is used.
+**What it measures:** The shape of the text, not its meaning. That's sentence length variation, how varied the vocabulary is (type-token ratio), and how much and what kind of punctuation shows up.
 
-**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and a narrower band of vocabulary, because that's what "most likely next word" produces on average. Human writing is lumpier — a three-word sentence next to a forty-word one, more idiosyncratic punctuation.
+**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and a narrower band of vocabulary, because that's what "most likely next word" produces on average. Human writing is lumpier: a three-word sentence next to a forty-word one, punctuation that's more idiosyncratic.
 
-**What it can't see:** This signal cannot read. It has no idea what the text says. Anything that changes the shape without changing the substance moves it — adding typos, breaking up sentences, pasting in a quotation. That's cheap for someone to do on purpose, which is exactly what next unit's attack set will try.
+**What it can't see:** This signal cannot read. It has no idea what the text actually says. Anything that changes the shape without changing the substance moves the score: adding typos, breaking up sentences, pasting in a quotation. That's a cheap thing for someone to do on purpose, which is exactly what next unit's attack set is going to try.
 
 ### The combining rule
 
-<!-- Write the rule in words, then give the numbers. What happens when the two
-     signals disagree? -->
+**The rule:** When the two signals are within 0.3 of each other, they're agreeing enough that I just average them normally. When they split by more than 0.3, I don't average straight down the middle. Instead I weight the combined score 70% toward whichever signal read more human and 30% toward the one reading more AI. A sharp disagreement between two different ways of measuring the same text is real uncertainty, and my false-positive trace from Milestone 1 already decided which way to lean when I'm uncertain: a missed detection costs the site a little, but a wrong accusation costs a real writer a lot.
 
-**The rule:**
-
-**The numbers:**
+**The numbers:** Equal weight (0.5 / 0.5) when the signals agree. On disagreement, 0.7 toward the lower (more human-reading) score and 0.3 toward the higher. The threshold and both lean values live in `config.py` (`DISAGREEMENT_THRESHOLD`, `DISAGREEMENT_LEAN_HUMAN`, `DISAGREEMENT_LEAN_AI`) alongside `WEIGHT_MODEL_SIGNAL` / `WEIGHT_STYLE_SIGNAL`.
 
 **Where it lives:** `scoring.py::combine_signals`
 
-<!-- ⚠️ The grader checks your code against that line. If your rule lives
-     somewhere else, say where. -->
-
 **A case where my two signals split, and what my rule does with it:**
 
+I took AI-generated text and riddled it with misspellings ("Teh implemetnation of teh propsed framwork reqiures carefull considerstion..."). The model signal scored it 0.0159, almost confidently human, because misspelled words are exactly what surprises a language model, and surprise reads as human to that signal. But the style signal still scored it 0.6727, leaning AI, because the sentence structure and word count underneath the typos hadn't actually changed. That's a 0.66 split, so my rule kicked in: it leaned 70% toward the human-reading score and landed at 0.2129, confidently human.
 
+I want to be upfront about what that means: my own rule just let a heavily-typoed piece of AI text through as "confidently human." I chose that trade on purpose, fewer false accusations of real writers, but it also means typos are a cheap way to fool this system. That's exactly the kind of thing I expect next unit's attack set to find.
+
+**A second finding from calibration:** `punctuation_density` came back 0.000 for every normal piece of text I tried, clearly-AI and clearly-human alike, because none of them happened to use a semicolon, colon, or dash. At zero, that measure always reads as maximally AI-like, even for totally ordinary human writing, so on its own it barely tells me anything. The style signal's real separating power comes from sentence length spread and vocabulary variety, and punctuation mostly just sits at its ceiling. I kept it in the average anyway, weighted equally with the other two since nothing argues one measure should count more, but it's the weakest of the three, and I'd rather say that than quietly rely on a signal that isn't doing much work.
 
 ---
 
@@ -129,21 +127,22 @@ $ curl -X POST http://127.0.0.1:5000/submit \
 
 ```json
 {
-  "content_id": "a3e12e29-f008-4909-8546-d3110fe06a7c",
+  "content_id": "be525806-87c2-44ae-aebb-d955480cb1d3",
   "guess": "placeholder",
-  "confidence": 0.0,
+  "confidence": 0.7859,
   "label": "placeholder",
   "model_score": 0.8552,
-  "style_score": 0.0
+  "style_score": 0.7167
 }
 ```
 
-<!-- guess/confidence/label are still placeholders as of Milestone 3 — the
-     second signal and the real scoring/labeling land in Milestones 4 and 5. -->
+<!-- guess/label are still placeholders as of Milestone 4. The real label
+     mapping lands in Milestone 5. Both signal scores and the combined
+     confidence are real now. -->
 
 **An appeal**
 
-<!-- TODO — /appeal is built in Milestone 5. -->
+<!-- TODO: /appeal is built in Milestone 5. -->
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
@@ -163,29 +162,40 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 
 ```json
 {
-  "count": 2,
+  "count": 3,
   "entries": [
     {
-      "combined_score": 0.0,
-      "content_id": "a2f8e268-6985-4b4b-aa61-415d4270cf60",
+      "combined_score": 0.2777,
+      "content_id": "f7e8eb16-7471-46a8-a7c6-4070717eb31d",
       "creator_id": "muskaan",
       "guess": "placeholder",
       "label": "placeholder",
-      "model_score": 0.1412,
+      "model_score": 0.1521,
       "status": "decided",
-      "style_score": 0.0,
-      "timestamp": "2026-10-28T08:21:54+00:00"
+      "style_score": 0.5709,
+      "timestamp": "2026-10-28T08:44:08+00:00"
     },
     {
-      "combined_score": 0.0,
-      "content_id": "a3e12e29-f008-4909-8546-d3110fe06a7c",
+      "combined_score": 0.7606,
+      "content_id": "36986923-7659-4624-93b3-904c38abc222",
+      "creator_id": "muskaan",
+      "guess": "placeholder",
+      "label": "placeholder",
+      "model_score": 0.8809,
+      "status": "decided",
+      "style_score": 0.6403,
+      "timestamp": "2026-10-28T08:44:08+00:00"
+    },
+    {
+      "combined_score": 0.7859,
+      "content_id": "be525806-87c2-44ae-aebb-d955480cb1d3",
       "creator_id": "muskaan",
       "guess": "placeholder",
       "label": "placeholder",
       "model_score": 0.8552,
       "status": "decided",
-      "style_score": 0.0,
-      "timestamp": "2026-10-28T08:22:09+00:00"
+      "style_score": 0.7167,
+      "timestamp": "2026-10-28T08:44:47+00:00"
     }
   ]
 }
