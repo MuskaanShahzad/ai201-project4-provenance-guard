@@ -216,10 +216,7 @@ def submit():
     model_score = detector.model_signal(text)
     style_score = stylometry.style_signal(text)
     confidence = scoring.combine_signals(model_score, style_score)
-
-    # Placeholder until Milestone 5 builds the real label mapping.
-    guess = "placeholder"
-    label = "placeholder"
+    guess, label = scoring.score_to_label(confidence)
 
     audit.log_decision(
         content_id=content_id,
@@ -262,13 +259,31 @@ def appeal():
     wrong accusation and nothing at all.
     """
     payload = request.get_json(silent=True) or {}
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
 
-    # TODO: delete this and build the route.
+    if not content_id or not reasoning:
+        return jsonify({
+            "error": "bad_request",
+            "message": "content_id and reasoning are both required.",
+        }), 400
+
+    existing = audit.entries_for(content_id)
+    if not existing:
+        return jsonify({
+            "error": "not_found",
+            "message": f"No submission found with content_id '{content_id}'.",
+        }), 404
+
+    creator_id = existing[0].get("creator_id")
+    audit.log_appeal(content_id=content_id, creator_id=creator_id, reasoning=reasoning)
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "ok": True,
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Your appeal has been recorded and will be reviewed.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────
