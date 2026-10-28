@@ -39,7 +39,13 @@
 <!-- The path a submission takes, from arriving to the label a reader sees.
      Six or seven steps — this is the trace you wrote in Milestone 1. -->
 
-
+1. A `POST /submit` request arrives with JSON: `text` and `creator_id`.
+2. The route pulls `text` and `creator_id` out of the request body.
+3. Signal one (`detector.py`) runs a local language model on the text and returns `model_score` — how predictable the text is, as a 0–1 number.
+4. Signal two (`stylometry.py`) measures the text's shape — sentence-length spread, vocabulary variety, punctuation — and returns `style_score`, also 0–1.
+5. `scoring.combine_signals()` merges `model_score` and `style_score` into one `combined_score`.
+6. `scoring.score_to_label()` turns that score into a short `guess` (`ai` / `human` / `unsure`) and the full label text a reader sees.
+7. The decision is written to the audit log via `audit.log_decision()`, and the response is returned with `content_id`, `guess`, `confidence`, `label`, `model_score`, and `style_score`.
 
 ---
 
@@ -53,19 +59,19 @@
 
 ### Signal one — the model signal
 
-**What it measures:**
+**What it measures:** Perplexity — how surprised a local language model (gpt2) is by the text, i.e. how predictable each next word is given what came before. Low perplexity means the model found the text easy to guess; high perplexity means it didn't.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** A language model writes by repeatedly picking a likely next word, so AI-generated text tends to be exactly what a model would predict — low perplexity. Human writing wanders more: odd word choices, abrupt turns, specific rather than typical phrasing.
 
-**What it can't see:**
+**What it can't see:** The difference between plainness and authorship. This signal rewards common words in short, ordinary sentences — which plenty of real people write in. Someone writing in a second language, a younger writer, anyone writing simply on purpose, scores about as machine-like as AI writing does. The reverse is also true: dense, rare-word prose often scores human even when AI wrote it, because rare words are what the model fails to predict. The writers this signal is most likely to accuse are the ones with the least room to argue back.
 
 ### Signal two — the style signal
 
-**What it measures:**
+**What it measures:** The shape of the text, not its meaning — how much sentence length varies, how varied the vocabulary is (type-token ratio), and how much/what kind of punctuation is used.
 
-**Why that might differ between human and AI writing:**
+**Why that might differ between human and AI writing:** Generated prose tends toward even, mid-length sentences and a narrower band of vocabulary, because that's what "most likely next word" produces on average. Human writing is lumpier — a three-word sentence next to a forty-word one, more idiosyncratic punctuation.
 
-**What it can't see:**
+**What it can't see:** This signal cannot read. It has no idea what the text says. Anything that changes the shape without changing the substance moves it — adding typos, breaking up sentences, pasting in a quotation. That's cheap for someone to do on purpose, which is exactly what next unit's attack set will try.
 
 ### The combining rule
 
