@@ -42,61 +42,43 @@ Two things worth knowing before you pick numbers:
   a **miss**.
 
 ---
-## 1.
+## 1. False positives
 
-<!-- Your criterion. It must name a number. -->
+Of 10 pieces of plainly-written human text I submit myself, at most 1 is labeled high-confidence AI.
 
-
-
-**Why this target:**
-
-
+**Why this target:** On a writing site, wrongly accusing a real writer costs more than missing some AI text — a false accusation damages trust in a way a missed detection doesn't.
 
 ---
 
-## 2.
+## 2. Score spread
 
-<!-- Your criterion. -->
+Clearly-AI text (raw model output) scores at least 0.3 higher on the combined score than clearly-human text, in all three trials.
 
-
-
-**Why this target:**
-
-
+**Why this target:** If obvious cases don't separate clearly, the combined score carries no information — the two signals should at least agree on the easy cases, leaving genuine ambiguity for the hard ones.
 
 ---
 
-## 3.
+## 3. Label coverage
 
-<!-- Your criterion. -->
+Across 10 varied test texts, all three labels (high-confidence human, unsure, high-confidence AI) are each produced at least once.
 
-
-
-**Why this target:**
-
-
+**Why this target:** A label nobody can reach isn't a real label — it means the system's actual behavior doesn't match what it claims to offer a reader.
 
 ---
 
-## 4.
+## 4. The appeal path
 
-<!-- Your criterion. -->
+100% of appeals submitted with a valid content_id move that item's status to under_review and appear in the audit log, with no exceptions across testing.
 
-
-
-**Why this target:**
-
-
+**Why this target:** The appeal is the only thing standing between a wrong accusation and nothing at all — if it silently fails sometimes, it isn't a real safeguard.
 
 ---
 
-## 5.
+## 5. Bad input
 
-<!-- Your criterion. -->
+Submitting missing, empty, or oversized text never returns a 500 — each case returns a specific error response instead.
 
-
-
-**Why this target:**
+**Why this target:** Malformed input is one of the most common real failures a service sees; crashing on it is worse than just rejecting it cleanly.
 
 
 
