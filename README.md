@@ -51,12 +51,6 @@
 
 ## Signals and Scoring
 
-<!-- For each signal: what property it measures, why that might differ between
-     human and AI writing, and WHAT IT CAN'T SEE.
-
-     The blind spot is not optional. If you can't name it you don't understand
-     the signal yet — and unit 8's attack set is built out of blind spots. -->
-
 ### Signal one — the model signal
 
 **What it measures:** Perplexity — how surprised a local language model (gpt2) is by the text, i.e. how predictable each next word is given what came before. Low perplexity means the model found the text easy to guess; high perplexity means it didn't.
@@ -130,14 +124,26 @@
 ```bash
 $ curl -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d '{"text": "The sun was setting behind the hills, and for a moment the whole valley looked like it was on fire.", "creator_id": "muskaan"}'
 ```
 
 ```json
-
+{
+  "content_id": "a3e12e29-f008-4909-8546-d3110fe06a7c",
+  "guess": "placeholder",
+  "confidence": 0.0,
+  "label": "placeholder",
+  "model_score": 0.8552,
+  "style_score": 0.0
+}
 ```
 
+<!-- guess/confidence/label are still placeholders as of Milestone 3 — the
+     second signal and the real scoring/labeling land in Milestones 4 and 5. -->
+
 **An appeal**
+
+<!-- TODO — /appeal is built in Milestone 5. -->
 
 ```bash
 $ curl -X POST http://127.0.0.1:5000/appeal \
@@ -156,7 +162,33 @@ $ curl "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "count": 2,
+  "entries": [
+    {
+      "combined_score": 0.0,
+      "content_id": "a2f8e268-6985-4b4b-aa61-415d4270cf60",
+      "creator_id": "muskaan",
+      "guess": "placeholder",
+      "label": "placeholder",
+      "model_score": 0.1412,
+      "status": "decided",
+      "style_score": 0.0,
+      "timestamp": "2026-10-28T08:21:54+00:00"
+    },
+    {
+      "combined_score": 0.0,
+      "content_id": "a3e12e29-f008-4909-8546-d3110fe06a7c",
+      "creator_id": "muskaan",
+      "guess": "placeholder",
+      "label": "placeholder",
+      "model_score": 0.8552,
+      "status": "decided",
+      "style_score": 0.0,
+      "timestamp": "2026-10-28T08:22:09+00:00"
+    }
+  ]
+}
 ```
 
 ---
