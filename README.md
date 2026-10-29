@@ -180,25 +180,24 @@ The two entries above share one content_id. The original decision keeps its "dec
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 60 per day
 
 **Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+A real writer revising a piece and submitting a few drafts in one sitting would stay well under 5 a minute without even thinking about it, and even pasting in every paragraph of a long piece separately over an hour would stay nowhere near 60 a day. A script trying to map my thresholds by sending a thousand variations gets throttled hard: at 5 a minute, obeying the limit means it would take over three hours just to send 1000 requests, and the 60-a-day cap means it could never even get there in a single day no matter how patient it is.
+
+**What a caller counts as:**
+
+A caller is identified by `creator_id` when the request includes one, and falls back to the caller's IP address when it doesn't. This is the starter's `rate_limit_key` function, which I didn't modify. Worth being honest about: since it keys on `creator_id` first, a script submitting under many different made-up `creator_id` values from the same address would get a fresh limit bucket for each one. That gap is exactly what the per-creator-vs-per-address stretch feature exists to address, and I left it out since I'm only doing required features this unit.
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
-
+```
+$ python run_attacks.py --flood 15
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
 ```
 
-```
+10 of 15 requests were rate limited, right after the 5th request, matching the 5-per-minute limit.
 
 ---
 

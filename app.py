@@ -154,7 +154,7 @@ def health():
 # ── YOU BUILD THIS ────────────────────────────────────────────────────────────
 
 @app.post("/submit")
-# @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
+@limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """
     Take a piece of text, decide about it, log the decision, answer.
@@ -207,6 +207,11 @@ def submit():
     creator_id = payload.get("creator_id")
 
     if not text.strip():
+        audit.log_rejection(
+            creator_id=creator_id or "unknown",
+            reason="bad_request",
+            detail="text is required and can't be empty.",
+        )
         return jsonify({
             "error": "bad_request",
             "message": "text is required and can't be empty.",
@@ -263,6 +268,11 @@ def appeal():
     reasoning = payload.get("reasoning")
 
     if not content_id or not reasoning:
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="bad_request",
+            detail="content_id and reasoning are both required.",
+        )
         return jsonify({
             "error": "bad_request",
             "message": "content_id and reasoning are both required.",
@@ -270,6 +280,12 @@ def appeal():
 
     existing = audit.entries_for(content_id)
     if not existing:
+        audit.log_rejection(
+            creator_id="unknown",
+            reason="not_found",
+            content_id=content_id,
+            detail=f"No submission found with content_id '{content_id}'.",
+        )
         return jsonify({
             "error": "not_found",
             "message": f"No submission found with content_id '{content_id}'.",
