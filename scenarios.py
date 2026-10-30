@@ -26,45 +26,71 @@ SCENARIOS = [
     {
         "name": "my own writing",
         "criterion": 1,
-        # ⚠️ PUT YOUR OWN WRITING HERE. Not AI text, not a sample from the web —
-        # things you actually wrote. This is the criterion that matters most and
-        # it's meaningless with someone else's prose.
+        # Ten things I actually wrote myself: real emails, texts, and messages
+        # pulled from my own correspondence, not generated or borrowed.
         "texts": [
-            "REPLACE ME with a paragraph you wrote yourself.",
-            "REPLACE ME with another one. Ten pieces is the usual number.",
+            "While trying to enroll in my benefits, I noticed that my gender is incorrectly listed as male. Could you please update it to female? I've attached a screenshot for your reference. Please let me know if you need any additional information from me to make this correction. Thank you for your help!",
+            "i am trying to make a payment for my parking fee and registered for the curb pass account so the administrative fee would be waived as stated on the site but it keeps on adding minimum $5 to add funds to curbpass. I do not want to add any funds and just pay what I owe. Please assist with this, thank you!",
+            "Thank you, I'll do that but it also says that it will autofill the wallet if the balance drops and I don't want my credit card to be on file. Can you please advise on this? Thank you!",
+            "I've attached screenshots of my selected flights for reference. I may not have a TSA PreCheck/Known Traveler Number or a frequent flyer number. Please let me know if you need any additional information to complete the booking.",
+            "I'll see you in San Francisco! I'm looking forward to finally meeting you in person and getting to connect again.",
+            "Attached is the speed test result, thank you!",
+            "Thank you for your kind message, I really appreciate you taking the time to review my resume. I'm glad to hear my experience aligns with your team's work.",
+            "Thank you, Justin! I appreciate it. Looking forward to speaking with you tomorrow!",
+            "I hope you've been doing well. I wanted to follow up regarding our conversation from March. I completely understand that things were still being finalised at the time, and I just wanted to check if there have been any updates on the role.",
+            "I hope you are well. I was traveling and unable to respond earlier.",
+        ],
+    },
+    {
+        "name": "score spread",
+        "criterion": 2,
+        # One clearly-AI paragraph (the kind of generic, hedge-everything prose
+        # a model defaults to) and one clearly-human paragraph (specific,
+        # lumpy, nobody would generate this on purpose), to check the gap
+        # between them.
+        "texts": [
+            "The implementation of the proposed framework requires careful consideration of several key factors. First, it is important to note that the system must be able to handle a wide variety of different inputs. Additionally, the overall performance of the solution depends on a number of important variables.",
+            "Grandma's kitchen always smelled like burnt cinnamon. She forgot the toast again this morning, muttering at the smoke alarm like it owed her money. I don't think that woman has made a slice of toast without setting something off in thirty years, and honestly? I'd miss it if she ever did.",
         ],
     },
     {
         "name": "label coverage",
-        "criterion": 2,
-        # Inputs spread across your score range, so you can check all three
-        # labels are actually reachable.
+        "criterion": 3,
+        # Ten varied texts spread across the range: generic AI-sounding
+        # paragraphs, genuinely human writing (casual and formal), and a
+        # couple of deliberately borderline ones.
         "texts": [
-            "REPLACE ME with something you're confident is AI-generated.",
-            "REPLACE ME with something you're confident is human-written.",
-            "REPLACE ME with something genuinely borderline.",
+            "The implementation of the proposed framework requires careful consideration of several key factors. First, it is important to note that the system must be able to handle a wide variety of different inputs. Additionally, the overall performance of the solution depends on a number of important variables.",
+            "Grandma's kitchen always smelled like burnt cinnamon. She forgot the toast again this morning, muttering at the smoke alarm like it owed her money. I don't think that woman has made a slice of toast without setting something off in thirty years, and honestly? I'd miss it if she ever did.",
+            "I went to the store yesterday and bought some milk and bread. It was a quiet afternoon and nothing much happened, just a regular trip to run errands.",
+            "I'll see you in San Francisco! I'm looking forward to finally meeting you in person and getting to connect again.",
+            "Thank you, Justin! I appreciate it. Looking forward to speaking with you tomorrow!",
+            "Utilizing a cloud-based infrastructure enables organizations to achieve significant improvements in scalability, reliability, and overall operational efficiency across distributed systems.",
+            "The system works well. It handles most cases correctly and provides good results. Users generally find it easy to use and understand.",
+            "Autumn arrived quietly that year, the way it always had, with the maples turning first and the neighborhood kids tracking leaves into every hallway they could find.",
+            "Please find attached the requested documentation for your review. Should you require any further information, do not hesitate to contact our support team at your earliest convenience.",
+            "honestly idk, today was kind of a mess lol. forgot my keys, missed the bus, then spilled coffee on my shirt right before the meeting. classic tuesday i guess",
         ],
     },
-    # A bad-input criterion looks like this. Uncomment and adjust if that's one
-    # of your five — these are raw request bodies, sent exactly as written.
-    #
-    # {
-    #     "name": "bad input",
-    #     "criterion": 3,
-    #     "bodies": [
-    #         {"text": "", "creator_id": "eval_bad_empty"},
-    #         {"creator_id": "eval_bad_missing"},          # no text field at all
-    #         {"text": "word " * 50000, "creator_id": "eval_bad_huge"},
-    #         {"text": None, "creator_id": "eval_bad_null"},
-    #     ],
-    # },
+    {
+        "name": "bad input",
+        "criterion": 5,
+        # Raw request bodies, sent exactly as written: empty text, no text
+        # field at all, something enormous, and a null.
+        "bodies": [
+            {"text": "", "creator_id": "eval_bad_empty"},
+            {"creator_id": "eval_bad_missing"},          # no text field at all
+            {"text": "word " * 50000, "creator_id": "eval_bad_huge"},
+            {"text": None, "creator_id": "eval_bad_null"},
+            {"text": "   ", "creator_id": "eval_bad_whitespace"},
+        ],
+    },
 
-    # TODO: add what your remaining criteria need.
-    #
-    # A criterion about the appeal path can't be tested by sending text alone;
-    # it needs a submission first and then an appeal against the content_id
-    # that came back. You'll need to test that one by hand, or extend this file
-    # and run_eval.py to do it. Saying which you did is part of the write-up.
+    # Criterion 4 (the appeal path) isn't here. run_eval.py only POSTs to
+    # /submit, and this criterion needs a submission first and then an appeal
+    # against the real content_id that came back, which this file can't
+    # express. I tested it by hand with curl instead: three trials, five
+    # submit-then-appeal pairs each. See the README for that output.
 ]
 
 
