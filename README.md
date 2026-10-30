@@ -343,9 +343,17 @@ I ran `scenarios.py` through `python run_eval.py --label before`, which produced
 | 2. score spread | ≥ 0.3 gap between clearly-AI and clearly-human | 0.3455 | 0.3455 | 0.3455 | MET |
 | 3. label coverage | all 3 labels reachable across 10 texts | 3/3 | 3/3 | 3/3 | MET |
 | 4. appeal path | 5 of 5 appeals change status to under_review | 5/5 | 5/5 | 5/5 | MET |
-| 5. bad input | 5 of 5 avoid a 500 | 5/5 | 5/5 | 5/5 | MET |
+| 5. bad input | missing, empty, AND oversized text each get a specific error response, never a 500 | 4/5 cases errored, oversized got a 200 | 4/5, same gap | 4/5, same gap | MISSED |
 
 All three trials came back identical on every criterion. That's expected, not a shortcut I skipped: neither signal has anything random in it, so the same text scores the same way every time.
+
+**How I decided each one:**
+
+- **Criterion 1**: Straightforward. 4 is more than 1, in all three trials, no reading of this gets me to MET.
+- **Criterion 2**: I only tested one AI example against one human example, not several pairs, so this is really evidence that this specific pair separates cleanly, not proof that the categories always separate by 0.3. I'm calling it MET because that's literally what I wrote down as the target, but I'm noting the thin sample here rather than letting the verdict imply more confidence than I actually have.
+- **Criterion 3**: Clean. All three labels showed up at least once, across all three trials, which is exactly what I asked for.
+- **Criterion 4**: Clean. The appeal path is a simple, deterministic code path with no branching that depends on which valid `content_id` comes in, so 15 out of 15 identical successes is solid evidence, not a lucky run.
+- **Criterion 5**: I almost marked this MET on a generous reading ("didn't crash" felt close enough to "handled correctly"). Re-reading my own target, it says all three bad-input cases should return a specific error response, and the oversized case returns a normal 200 instead. That's a miss I'd have talked myself out of if I hadn't gone back and read the words I actually wrote.
 
 **Real output from one trial**, pasted as text, naming the file and function that produced it:
 
@@ -488,21 +496,35 @@ And the matching audit log entries for that same content_id, confirming the orig
 
 **Diagnoses**
 
-<!-- For each miss AND each broken attack: the stage and the mechanism.
+I have two misses from my own criteria and thirteen broken attacks from the last unit's run. Almost all of them trace back to three patterns, not eighteen separate problems.
 
-     Your service has five stages: the route, signal one, signal two, the
-     combining rule, and the label mapping.
+**Pattern A: signal one's blind spot is hitting real writing, not just hypotheticals.** This covers my Criterion 1 miss and 6 of the 8 `false_positive` attack breaks (FP02, FP03, FP04, FP05, FP06, FP07), ten instances total.
 
-     Not a diagnosis:  "The evasion attacks got through."
-     A diagnosis:      "Four evasion inputs got through. All four had typos
-                        added to AI-generated text. My second signal measures
-                        word variety, and typos raise word variety — so it read
-                        them as more human. My combining rule weights that
-                        signal at 0.6, so it dragged the whole score down."
+All four of my own flagged texts share one thing: short, polite, predictable phrasing ("Thank you, Justin!", "I'll see you in San Francisco!"). Their `model_score`s ran 0.77-0.84, which is signal one reading common, formulaic correspondence as machine-like, exactly the blind spot I named for it back in Milestone 1 of the last unit: it rewards common words in short, ordinary sentences, and plenty of real people write that way. The attack set's `false_positive` family hits the same mechanism from the other direction: formal register, a non-native speaker writing carefully, a rubric-driven essay, technical documentation, all careful, correct, unremarkable writing that reads as highly predictable to a perplexity-based signal.
 
-     Look for a pattern. Five failures on one signal is one problem, not five. -->
+Signal two didn't catch any of these. Every one of these texts had a `style_score` also leaning AI-ish (0.58-0.70), because careful, correct writing also tends toward lower vocabulary variety and little of the semicolon/dash punctuation my style signal treats as a human marker. Since both signals land on the same side, my combining rule's disagreement check (lean toward human when the two signals split by more than 0.3) never fires. It only protects against the two signals disagreeing, and here they agree with each other on the wrong answer.
 
+Stage: signal one (`detector.py::model_signal`), with signal two failing to counteract it instead of catching what it misses.
 
+**Pattern B: the route never checks what shape or size its input actually is.** This covers all 5 crashes from the attack set (MF02, RQ03, RQ04, RQ07, RQ12) and my Criterion 5 miss, six instances, three variations on the same gap:
+
+- *Wrong type*: `app.py::submit` does `text = payload.get("text") or ""`, which only catches `None` or an empty string. A number, a list, or a dict is truthy and passes straight through to `text.strip()`, which crashes with `AttributeError` (RQ03, RQ04, RQ12). A JSON body that's a list instead of an object crashes the same way on `payload.get("text")`, since a list has no `.get()` (RQ07).
+- *Too short*: a single character passes the emptiness check (it's non-empty) but is too short for the tokenizer, and `detector.perplexity()` raises `ValueError: Text is too short to score`, which nothing in `app.py::submit` catches (MF02).
+- *Too long*: there's no size check at all. Oversized text flows straight into `detector.model_signal`, where the tokenizer silently truncates it to 400 tokens (`DETECTOR_MAX_TOKENS` in `config.py`) and scores whatever's left, with no indication to the caller that most of their submission was ignored (my Criterion 5 miss).
+
+All three are the same sentence: the route trusts the shape and size of `text` and `payload` before it uses either. Stage: the route (`app.py::submit`).
+
+One more thing worth saying plainly about the 5 crashes: none of them left any trace in the audit log, not even a rejection, since the crash happens before my code ever reaches an `audit.log_*` call. That's not a new pattern, it's the same Pattern B bug, but it means this particular failure is currently invisible in my own records, which is its own problem on top of the crash itself.
+
+**Pattern C: noise fools both signals together, in either direction.** This covers 2 evasion breaks (EV01, EV08).
+
+EV01 added typos to AI-generated text and it came back `human` on both signals at once (model_score 0.1635, style_score 0.6636), not just one. Typos spike perplexity, which signal one reads as human, and they inflate type-token ratio, which signal two also reads as human. It's Pattern A's mirror image: instead of two signals agreeing on a false accusation, here they agree on a false clearance, because the same injected noise moves both signals the same direction at once. This matches a finding I already wrote down in Milestone 4 of the last unit, when I deliberately typo'd AI text during calibration and got the same result.
+
+EV08 (AI text shorter than the token window) is a smaller version of the same idea: at that length, neither signal has enough material to be confident, but nothing in my pipeline says "this reading is low-confidence," so an unreliable score gets reported with the same certainty as a reliable one.
+
+Stage: both signals (`detector.py::model_signal` and `stylometry.py::style_signal`), since the same noise moves them in the same direction instead of them disagreeing the way independent measurements should.
+
+**What this adds up to:** two of my three patterns (A and C) come down to the same root issue from two directions, my two signals aren't as independent as I designed them to be, since both react to surface-level predictability rather than genuinely different properties of the text. The third pattern (B) is a separate, simpler gap: the route was never written to distrust its own input. I did not hold everything, and the targets I missed weren't set too low, they were correct targets that a real weakness in the pipeline failed to meet.
 
 ---
 
