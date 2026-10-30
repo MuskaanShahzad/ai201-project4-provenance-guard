@@ -532,20 +532,58 @@ Stage: both signals (`detector.py::model_signal` and `stylometry.py::style_signa
 
 **What I changed:**
 
+I added input validation to `app.py::submit`, ahead of both signals, in three parts: checking that `text` is actually a string (not a number, a list, or a dict), rejecting anything longer than `config.MAX_TEXT_LENGTH` (20,000 characters) instead of silently truncating it, and catching the "too short to score" `ValueError` that `detector.py` already raised but nothing used to catch. All three return a clean 400 with a specific message now, logged through `audit.log_rejection`, instead of an unhandled crash or a silently-processed response.
+
 **Which diagnosis pointed at it:**
+
+Pattern B from Milestone 4: 5 crashes (MF02, RQ03, RQ04, RQ07, RQ12) plus my Criterion 5 miss, all the same root issue, the route trusted the shape and size of its input without checking either one.
+
+I picked this over fixing Pattern A (the false-positive problem) on purpose. Only one change is allowed this milestone, and Pattern A doesn't have a clean fix, moving the AI threshold higher would reduce false positives but also soften real AI detection in that same range, a genuine trade-off I'd rather think through properly than patch with a single number. This fix had no such trade-off: there's no legitimate reason for the route to crash on a malformed type, or to quietly truncate oversized text without saying so.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+I re-ran the full 56-attack set (`python run_attacks.py --set attack_set --label after`). Full results: `results/attack_run_2026-10-29_1944_after.md`.
 
+| | Before | After |
+|---|---|---|
+| Held | 43 | **48** |
+| Broke | 13 | **8** |
+| Crashes (5xx) | 5 | **0** |
 
+By family:
+
+| Family | Before (held/broke) | After (held/broke) |
+|---|---|---|
+| evasion | 8 / 2 | 8 / 2 (unchanged) |
+| false_positive | 2 / 6 | 2 / 6 (unchanged) |
+| prompt_injection | 6 / 0 | 6 / 0 (unchanged) |
+| malformed | 15 / 5 | **20 / 0** |
+| flood_same_creator | 12 / 0 | 12 / 0 (unchanged) |
+
+Every evasion, false_positive, and prompt_injection result came back byte-identical to the before run, same guess, same scores, since this change never touched a signal, a weight, or a threshold. Only `malformed` moved, and it moved all the way: 0 crashes, down from 5.
+
+One of the five, as proof the fix actually works and not just that the crash disappeared quietly:
+
+```json
+{
+  "timestamp": "2026-10-30T00:44:36+00:00",
+  "creator_id": "attacker_RQ03",
+  "event": "rejected",
+  "status": "rejected",
+  "reason": "bad_request",
+  "detail": "text is required and must be a non-empty string."
+}
+```
+
+That's `RQ03` ("text is a number"), which used to crash with an unhandled `AttributeError` and leave zero trace in the audit log. Now it's a clean, logged rejection.
+
+Two rows worth explaining rather than letting them look like new behavior: `MF08` (60,000 characters) now returns 400 instead of 200, that's intentional, it's the oversized-text case Criterion 5 was about. `RQ09` came back 429 here where it was 400 before, but that's not a behavior change either, it's because one of my own verification curls (testing the fix itself, sent with no `creator_id`) used up a slot in my address's rate limit bucket right before this official run, shifting which row hit the cap first by one. Both are explained in full in the results file.
 
 **Did it help, and how do I know:**
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+Yes, and cleanly: 5 more held, 5 fewer broken, all five from the exact family my diagnosis named, and every other family is untouched. Criterion 5 flipped from MISSED to MET in the re-run (`results/run_2026-10-29_1946_after.md`), all 5 of 5 bad-input cases across all 3 trials now return a specific error instead of a 500 or a silent 200. Criteria 1, 2, 3, and 4 are unchanged, which is exactly what I'd want from a fix that was only supposed to touch input validation.
 
-
+Unlike moving a threshold, this one came with no trade-off to report honestly, I didn't make anything else worse to fix this. The real cost is the one I already named before making the change: the false-positive problem (Pattern A) is still exactly as broken as it was, my own writing still gets flagged 4 times out of 10, and 6 of 8 false-positive attacks still get through. I chose not to touch that this round, on purpose, rather than reach for a one-number fix that trades one kind of harm for another without enough thought behind it.
 
 ---
 

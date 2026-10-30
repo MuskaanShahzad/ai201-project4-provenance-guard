@@ -46,6 +46,14 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 # 300 words, which is enough for the signal to mean something.
 DETECTOR_MAX_TOKENS = 400
 
+# ─── Input validation (UNIT 8, Milestone 5) ─────────────────────────────────
+# My one improvement: the route used to trust that `text` was always a
+# reasonably-sized string without checking. 20,000 characters is roughly
+# 3,000-4,000 words, generous for any real submission, but it rejects the
+# kind of enormous payload an attacker (or a bug) would send instead of
+# silently truncating it and scoring whatever was left.
+MAX_TEXT_LENGTH = 20_000
+
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
